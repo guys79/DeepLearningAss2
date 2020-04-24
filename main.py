@@ -3,12 +3,14 @@ from keras.models import Sequential, Model
 from keras.layers import Conv2D,Flatten,Dense,Input,Lambda
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
+from keras.metrics import accuracy,binary_crossentropy
 from keras import backend
 from keras.optimizers import Adam
 from keras.losses import binary_crossentropy
 import cv2
 import pathlib
-
+import random
+import numpy as np
 
 def get_train_set():
     """
@@ -61,18 +63,67 @@ def get_test_set():
             test.append(test_tuple)
     return test
 
-def get_single_image(name,number):
+def get_img_set(tuple_list,shape = (105,105,1)):
+    """
+    This function receives a set of image tuples and a shape
+    The function will return the set of image objects with the shape of the given shape
+    :param tuple_list: a list of ('folder_name', img1,img2) or ('folder_name1',img1,'folder_name2',img2)
+    :param shape: the image's shape
+    :return: A set of image objects with the shape of the given shape
+    """
+
+    x1 = []
+    x2 = []
+    y = []
+    random.shuffle(tuple_list)
+    for tple in tuple_list:
+        if len(tple) == 4:
+            img1 = get_single_image(tple[0],tple[1],shape = shape)
+            img2 = get_single_image(tple[0],tple[2],shape=shape)
+            y.append(tple[3])
+        elif len(tple) == 5:
+            img1 = get_single_image(tple[0], tple[1],shape=shape)
+            img2 = get_single_image(tple[2], tple[3],shape=shape)
+            y.append(tple[4])
+        else:
+
+            raise Exception("invalid tuple size %d" % len(tple))
+        x1.append(img1)
+        x2.append(img2)
+
+    return [np.array(x1),np.array(x2),np.reshape(np.array(y),(len(y),))]
+
+def get_single_image(name,number,shape = (105,105,1)):
+    """
+    This function receives a image name, number and shape.
+    The function will return a image object with the given shape
+    :param name: The image's name
+    :param number: The image's number
+    :param shape: The image's shape
+    :return: The image object with the given shap
+    """
     format_num = format_number(number)
     path = r'%s/lfw2/%s/%s_%s.jpg' % (pathlib.Path(__file__).parent.absolute(),name,name,format_num)
     img = cv2.imread(path)
-    return img
+    resized_img = np.resize(img,shape).astype(float)
+    for rgb in range(3):
+        resized_img[rgb]/=255
+    return resized_img
+
 
 def format_number(num):
+    """
+    Thus function will transform a number to the **** format
+    for example, 12 -> 0012
+    :param num: The number
+    :return: The number in the right format
+    """
     str_num = str(num)
     while len(str_num)<4:
         str_num = "0%s" % str_num
     return str_num
-def get_train_test_sets():
+
+def get_train_test_sets(shape = (105,105,1)):
     """
     This function will return the train and test sets in the form of:
     Same person - ('folder_name',ing_num1,img_num2,1)
@@ -80,8 +131,10 @@ def get_train_test_sets():
     :return: The train & test sets
     """
     train = get_train_set()
+    img_train = get_img_set(train,shape = shape)
     test = get_test_set()
-    return train,test
+    img_test = get_img_set(test,shape = shape)
+    return img_train,img_test
 
 def get_conv_weight_initializer():
     """
@@ -168,17 +221,132 @@ def build_model(shape):
     final_network = Model(inputs = [twin1_input,twin2_input],outputs = output_layer)
 
     # Compile network with the loss and optimizer
-    final_network.compile(loss=binary_crossentropy,optimizer=Adam(lr = 0.00001))
+    final_network.compile(loss='binary_crossentropy',optimizer=Adam(lr = 0.00001),metrics=[accuracy,binary_crossentropy])
+    #final_network.compile(loss=binary_crossentropy,optimizer=Adam(lr = 0.00001))
 
     return final_network
 
-#f = build_model((105,105,1))
-#f.summary()
 
-train,test = get_train_test_sets()
-print(train)
-print(len(train))
-print(test)
-print(len(test))
-cv2.imshow('image',get_single_image('Marsha_Thomason',1))
-cv2.waitKey()
+def get_train_validation(train,portion):
+    """
+    This function will divide the train set into validation/train sets
+    :param train: The train set
+    :param portion: The portion of the validation set
+    :return: The validation/train set
+    """
+    x_train1 = train[0]
+    x_train2 = train[1]
+    y_train = train[2]
+    validation_len = int(len(x_train1)*portion)
+    validation_set_indices = random.sample(range(len(x_train1)),validation_len)
+    validation_set_indices.sort()
+    new_x1_train =[]
+    new_x2_train =[]
+    new_y_train =[]
+    x1_validation =[]
+    x2_validation =[]
+    y_validation =[]
+
+    validation_index = 0
+    for i in range(len(x_train1)):
+        if validation_index != validation_len and validation_set_indices[validation_index] == i:
+            x1_validation.append(x_train1[i])
+            x2_validation.append(x_train2[i])
+            y_validation.append(y_train[i])
+            validation_index+=1
+        else:
+            new_x1_train.append(x_train1[i])
+            new_x2_train.append(x_train2[i])
+            new_y_train.append(y_train[i])
+    return [np.array(new_x1_train),np.array(new_x2_train),np.array([new_y_train])],[np.array(x1_validation)
+                ,np.array(x2_validation),np.array(y_validation)]
+
+
+def get_batches(batch_size, x1_train,x2_train, y_train):
+    """
+    Get the list of batches for training
+    :param batch_size: size of batch
+    :param x_train: train instances
+    :param y_train: train labels
+    :return: list of batches
+    """
+    instance_count = len(x1_train)
+    batch_num = int(instance_count / batch_size)
+    batches = []
+    for batch in range(batch_num + 1):
+        batch_start = batch * batch_size
+        if batch_start == instance_count:
+            break  # in case the len of train set is a multiple of batch size
+        batch_end = min((batch + 1) * batch_size, instance_count)  # avoid index out of bounds
+        x_batch = [x1_train[ batch_start:batch_end],x2_train[batch_start:batch_end]]
+        y_batch = y_train[ :,batch_start:batch_end]
+        y_batch = y_batch.reshape(y_batch.shape[1],)
+        batches.append([x_batch, y_batch])
+    return batches
+
+def train_model(siamese_model, train,validation,batch_size,num_iterations, max_no_improve = 100,max_epochs = 25):
+    x1_train = train[0]
+    x2_train = train[1]
+    y_train = train[2]
+    x1_validation = validation[0]
+    x2_validation = validation[1]
+    x_validation = [x1_validation,x2_validation]
+    y_validation = validation[2]
+
+    batches = get_batches(batch_size,x1_train,x2_train,y_train)
+    iteration = 0
+    best_val_loss = -1
+    no_improve = 0
+    epoch = 0
+    while True:
+
+        for x_batch,y_batch in batches:
+            iteration+=1
+            print("iteration - %d epoch - %d" %(iteration,epoch))
+            history = siamese_model.fit(x=x_batch,y=y_batch)
+            print("loss - %s" % history.history["loss"] )
+            val_lost = siamese_model.evaluate(x = x_validation,y = y_validation)
+            print(val_lost)
+            if best_val_loss == -1 or best_val_loss > val_lost:
+                best_val_loss = val_lost
+                no_improve = 0
+            else:
+                no_improve +=1
+
+            if iteration == num_iterations or max_no_improve == no_improve:
+                break
+        epoch+=1
+        if iteration == num_iterations or max_no_improve == no_improve or epoch == max_epochs:
+            break
+
+
+def test_prediction(siamese_model, test):
+    x1_test = test[0]
+    x2_test = test[1]
+    x_test = [x1_test,x2_test]
+    y_test = test[2]
+    val_lost = siamese_model.evaluate(x=x_test, y=y_test)
+    print(val_lost)
+
+
+def test_model():
+
+    img_shape = (105,105,3)
+    validation_portion = 0.2
+    batch_size = 32
+    num_of_iterations = 2
+    train,test = get_train_test_sets(shape=img_shape)
+
+    train, validation = get_train_validation(train, validation_portion)
+
+
+    siamese_model = build_model(shape=img_shape)
+    siamese_model.summary()
+    train_model(siamese_model,train,validation,batch_size,num_of_iterations)
+    test_prediction(siamese_model,test)
+
+
+    #predict(siamese_model,test)
+
+
+test_model()
