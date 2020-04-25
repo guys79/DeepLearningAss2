@@ -110,15 +110,11 @@ def get_single_image(name, number, shape=(105, 105, 1)):
     :param shape: The image's shape
     :return: The image object with the given shap
     """
-    # todo: changed the things I commented out
     format_num = format_number(number)
     path = r'%s/lfw2/%s/%s_%s.jpg' % (pathlib.Path(__file__).parent.absolute(), name, name, format_num)
-    # img = cv2.imread(path)
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    # resized_img = np.resize(img,shape).astype(float)
+    # todo: maybe don't resize at all? could be losing face details by resizing
     resized_img = cv2.resize(img, shape, interpolation=cv2.INTER_AREA) / 255
-    # for rgb in range(3):
-    #     resized_img[rgb] /= 255
     return resized_img
 
 
