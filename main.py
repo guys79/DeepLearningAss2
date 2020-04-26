@@ -101,7 +101,7 @@ def get_img_set(tuple_list, shape=(105, 105, 1)):
     return [np.array(x1), np.array(x2), np.reshape(np.array(y), (len(y),))]
 
 
-def get_single_image(name, number, shape=(105, 105, 1)):
+def get_single_image(name, number, shape=(105, 105, 1), margin=0.25):
     """
     This function receives a image name, number and shape.
     The function will return a image object with the given shape
@@ -113,8 +113,10 @@ def get_single_image(name, number, shape=(105, 105, 1)):
     format_num = format_number(number)
     path = r'%s/lfw2/%s/%s_%s.jpg' % (pathlib.Path(__file__).parent.absolute(), name, name, format_num)
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    # todo: maybe don't resize at all? could be losing face details by resizing
-    resized_img = cv2.resize(img, shape, interpolation=cv2.INTER_AREA) / 255
+    width = img.shape[0]
+    height = img.shape[1]
+    cropped_img = img[margin:width-margin, margin:height-margin]
+    resized_img = cv2.resize(cropped_img, shape, interpolation=cv2.INTER_AREA) / 255
     return resized_img
 
 
@@ -176,7 +178,7 @@ def build_model(shape):
     :return: A Siamese Neural Network
     """
     with tf.device('/CPU:0'):
-        conv_initializer = get_conv_weight_initializer()  # The wight initializer for the Convolution layers
+        conv_initializer = get_conv_weight_initializer()  # The weight initializer for the Convolution layers
         bias_initializer = get_bias_weight_initializer()  # The bias initializer for the biases
         fc_initializer = get_fc_weight_initializer()  # The fc initializer for the fully connected layers
         n_features = 4096
