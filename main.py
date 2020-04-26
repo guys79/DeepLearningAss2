@@ -102,21 +102,25 @@ def get_img_set(tuple_list, shape=(105, 105, 1)):
     return [np.array(x1), np.array(x2), np.reshape(np.array(y), (len(y),))]
 
 
-def get_single_image(name, number, shape=(105, 105, 1)):
+def get_single_image(name, number, shape=(105, 105, 1), margin=0.25):
     """
     This function receives a image name, number and shape.
     The function will return a image object with the given shape
     :param name: The image's name
     :param number: The image's number
     :param shape: The image's shape
+    :param margin: portion of img to crop from each border
     :return: The image object with the given shap
     """
     format_num = format_number(number)
     path = r'%s/lfw2/%s/%s_%s.jpg' % (pathlib.Path(__file__).parent.absolute(), name, name, format_num)
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    # todo: maybe don't resize at all? could be losing face details by resizing
-    resized_img = cv2.resize(img, (shape[0],shape[1]), interpolation=cv2.INTER_AREA) / 255
-    resized_img = np.reshape(resized_img,shape)
+    width = img.shape[0]
+    height = img.shape[1]
+    width_margin = int(margin * width)
+    height_margin = int(margin * height)
+    cropped_img = img[width_margin:width - width_margin, height_margin:height - height_margin]
+    resized_img = cv2.resize(cropped_img, shape, interpolation=cv2.INTER_AREA) / 255
     return resized_img
 
 
