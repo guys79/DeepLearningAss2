@@ -116,7 +116,9 @@ def get_single_image(name, number, shape=(105, 105, 1), margin=0.25):
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     width = img.shape[0]
     height = img.shape[1]
-    cropped_img = img[margin:width - margin, margin:height - margin]
+    width_margin = int(margin * width)
+    height_margin = int(margin * height)
+    cropped_img = img[width_margin:width - width_margin, height_margin:height - height_margin]
     resized_img = cv2.resize(cropped_img, shape, interpolation=cv2.INTER_AREA) / 255
     return resized_img
 
