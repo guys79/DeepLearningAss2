@@ -120,7 +120,8 @@ def get_single_image(name, number, shape=(105, 105, 1), margin=0.25):
     width_margin = int(margin * width)
     height_margin = int(margin * height)
     cropped_img = img[width_margin:width - width_margin, height_margin:height - height_margin]
-    resized_img = cv2.resize(cropped_img, shape, interpolation=cv2.INTER_AREA) / 255
+    resized_img = cv2.resize(cropped_img, (shape[0],shape[1]), interpolation=cv2.INTER_AREA) / 255
+    resized_img = np.reshape(resized_img, shape)
     return resized_img
 
 
@@ -379,10 +380,11 @@ def train_model(siamese_model, train, validation, batch_size, num_iterations, ma
     """
     X_train = [x1_train,x2_train]
 
-    history = siamese_model.fit(x=X_train, y=y_train,validation_split=0.2,batch_size=32,epochs=50,verbose=2)
+    history = siamese_model.fit(x=X_train, y=y_train,validation_split=0.2,batch_size=32,epochs=2,verbose=2)
+
     y_r = siamese_model.predict(X_train)
     print(binary_crossentropy(y_true=y_train,y_pred=y_r))
-
+    return history.history
 
 
 
@@ -392,9 +394,33 @@ def test_prediction(siamese_model, test):
     x2_test = test[1]
     x_test = [x1_test, x2_test]
     y_test = test[2]
-    val_lost = siamese_model.evaluate(x=x_test, y=y_test)
-    print(val_lost)
+    score = siamese_model.evaluate(x=x_test, y=y_test)
+    loss = score[0]
+    acc = score[1]
+    return loss,acc
 
+def write_to_file(history,test_loss,test_acc):
+    to_file = []
+    header = "epoch"
+    scores = []
+    epoch = 0
+    for key in history:
+        header = "%s,%s" % (header, key)
+        scores.append(history[key])
+
+    to_file.append(header)
+    for i in range(len(scores[0])):
+        epoch += 1
+        line = "%d" % epoch
+        for j in range(len(scores)):
+            line = "%s,%s" % (line, scores[j][i])
+        to_file.append(line)
+    test_line = "test_loss,%s,test_accuracy,%s" % (test_loss, test_acc)
+    to_file.append(test_line)
+
+    file = open('results.csv', 'w')
+    for i in range(len(to_file)):
+        file.write("%s\n" % to_file[i])
 
 def test_model():
     # todo: changed the shape since img can be greyscale (much smaller dimensions)
@@ -417,8 +443,11 @@ def test_model():
 
     print("Training model...")
     #train_model(siamese_model, train, validation, batch_size, num_of_iterations)
-    train_model(siamese_model, train, None, batch_size, num_of_iterations)
-    test_prediction(siamese_model, test)
+    history = train_model(siamese_model, train, None, batch_size, num_of_iterations)
+    test_loss, test_acc = test_prediction(siamese_model, test)
+    write_to_file(history,test_loss,test_acc)
+
+
 
 
 
