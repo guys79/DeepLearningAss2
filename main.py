@@ -3,7 +3,7 @@ from keras.models import Sequential, Model
 from keras.layers import Conv2D, Flatten, Dense, Input, Lambda
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
-from keras.metrics import accuracy, binary_crossentropy
+from keras.metrics import accuracy, binary_accuracy
 from keras import backend
 from keras.optimizers import Adam
 from keras.losses import binary_crossentropy
@@ -13,9 +13,9 @@ import random
 import numpy as np
 import tensorflow as tf
 
-threads = 1
-tf.config.threading.set_intra_op_parallelism_threads(threads)
-tf.config.threading.set_inter_op_parallelism_threads(threads)
+#threads = 1
+#tf.config.threading.set_intra_op_parallelism_threads(threads)
+#tf.config.threading.set_inter_op_parallelism_threads(threads)
 
 
 def get_train_set():
@@ -101,7 +101,7 @@ def get_img_set(tuple_list, shape=(105, 105, 1)):
     return [np.array(x1), np.array(x2), np.reshape(np.array(y), (len(y),))]
 
 
-def get_single_image(name, number, shape=(105, 105, 1), margin=0.25):
+def get_single_image(name, number, shape=(105, 105, 1)):
     """
     This function receives a image name, number and shape.
     The function will return a image object with the given shape
@@ -113,10 +113,9 @@ def get_single_image(name, number, shape=(105, 105, 1), margin=0.25):
     format_num = format_number(number)
     path = r'%s/lfw2/%s/%s_%s.jpg' % (pathlib.Path(__file__).parent.absolute(), name, name, format_num)
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    width = img.shape[0]
-    height = img.shape[1]
-    cropped_img = img[margin:width-margin, margin:height-margin]
-    resized_img = cv2.resize(cropped_img, shape, interpolation=cv2.INTER_AREA) / 255
+    # todo: maybe don't resize at all? could be losing face details by resizing
+    resized_img = cv2.resize(img, (shape[0],shape[1]), interpolation=cv2.INTER_AREA) / 255
+    resized_img = np.reshape(resized_img,shape)
     return resized_img
 
 
@@ -177,70 +176,70 @@ def build_model(shape):
     :param shape: The shape of the input
     :return: A Siamese Neural Network
     """
-    with tf.device('/CPU:0'):
-        conv_initializer = get_conv_weight_initializer()  # The weight initializer for the Convolution layers
-        bias_initializer = get_bias_weight_initializer()  # The bias initializer for the biases
-        fc_initializer = get_fc_weight_initializer()  # The fc initializer for the fully connected layers
-        n_features = 4096
-        l2_penalty = 0.001  # The penalty for the L2 regularization
+    #with tf.device('/CPU:0'):
+    conv_initializer = get_conv_weight_initializer()  # The wight initializer for the Convolution layers
+    bias_initializer = get_bias_weight_initializer()  # The bias initializer for the biases
+    fc_initializer = get_fc_weight_initializer()  # The fc initializer for the fully connected layers
+    n_features = 4096
+    l2_penalty = 0.001  # The penalty for the L2 regularization
 
-        model = Sequential()
+    model = Sequential()
 
-        # Add a convolution layer with 64 10x10 filters. The activation function is RELU
-        model.add(Conv2D(64, (10, 10), activation='relu', input_shape=shape, kernel_initializer=conv_initializer,
-                         bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-        # MaxPooling (2,2)
-        model.add(MaxPool2D(pool_size=(2, 2)))
+    # Add a convolution layer with 64 10x10 filters. The activation function is RELU
+    model.add(Conv2D(64, (10, 10), activation='relu', input_shape=shape, kernel_initializer=conv_initializer,
+                     bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
+    # MaxPooling (2,2)
+    model.add(MaxPool2D(pool_size=(2, 2)))
 
-        # Add a convolution layer with 128 7x7 filters. The activation function is RELU
-        model.add(Conv2D(128, (7, 7), activation='relu', kernel_initializer=conv_initializer,
-                         bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-        # MaxPooling (2,2)
-        model.add(MaxPool2D(pool_size=(2, 2)))
+    # Add a convolution layer with 128 7x7 filters. The activation function is RELU
+    model.add(Conv2D(128, (7, 7), activation='relu', kernel_initializer=conv_initializer,
+                     bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
+    # MaxPooling (2,2)
+    model.add(MaxPool2D(pool_size=(2, 2)))
 
-        # Add a convolution layer with 128 4x4 filters. The activation function is RELU
-        model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=conv_initializer,
-                         bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-        # MaxPooling (2,2)
-        model.add(MaxPool2D(pool_size=(2, 2)))
+    # Add a convolution layer with 128 4x4 filters. The activation function is RELU
+    model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=conv_initializer,
+                     bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
+    # MaxPooling (2,2)
+    model.add(MaxPool2D(pool_size=(2, 2)))
 
-        # Add a convolution layer with 256 4x4 filters. The activation function is RELU
-        model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer=conv_initializer,
-                         bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-        # Flatten the
-        model.add(Flatten())
+    # Add a convolution layer with 256 4x4 filters. The activation function is RELU
+    model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer=conv_initializer,
+                     bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
+    # Flatten the
+    model.add(Flatten())
 
-        # Add a fully connected layer with 4096 units (the number of features in the feature map)
-        model.add(
-            Dense(n_features, activation='sigmoid', kernel_initializer=fc_initializer, bias_initializer=bias_initializer
-                  , kernel_regularizer=l2(l2_penalty)))
+    # Add a fully connected layer with 4096 units (the number of features in the feature map)
+    model.add(
+        Dense(n_features, activation='sigmoid', kernel_initializer=fc_initializer, bias_initializer=bias_initializer
+              , kernel_regularizer=l2(l2_penalty)))
 
-        # Creating the two twins based in the model
-        twin1_input = Input(shape)
-        twin2_input = Input(shape)
-        twin1 = model(twin1_input)
-        twin2 = model(twin2_input)
+    # Creating the two twins based in the model
+    twin1_input = Input(shape)
+    twin2_input = Input(shape)
+    twin1 = model(twin1_input)
+    twin2 = model(twin2_input)
 
-        # Creating a custom layer rule to merge the twin results using l1 siamese distance
-        #
-        merge_layer_rule = Lambda(lambda output: backend.abs(output[0] - output[1]))
+    # Creating a custom layer rule to merge the twin results using l1 siamese distance
+    #
+    merge_layer_rule = Lambda(lambda output: backend.abs(output[0] - output[1]))
 
-        # Create the merge layer with twin1 and twin2 as the inputs
-        merge_layer = merge_layer_rule([twin1, twin2])
+    # Create the merge layer with twin1 and twin2 as the inputs
+    merge_layer = merge_layer_rule([twin1, twin2])
 
-        # Creating the output layer (only one output neuron)
-        output_layer = Dense(1, activation='sigmoid', kernel_initializer=fc_initializer
-                             , bias_initializer=bias_initializer)(merge_layer)
+    # Creating the output layer (only one output neuron)
+    output_layer = Dense(1, activation='sigmoid', kernel_initializer=fc_initializer
+                         , bias_initializer=bias_initializer)(merge_layer)
 
-        # Creating the final network
-        final_network = Model(inputs=[twin1_input, twin2_input], outputs=output_layer)
+    # Creating the final network
+    final_network = Model(inputs=[twin1_input, twin2_input], outputs=output_layer)
 
-        # Compile network with the loss and optimizer
-        final_network.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.00001),
-                              metrics=[accuracy, binary_crossentropy])
-        # final_network.compile(loss=binary_crossentropy,optimizer=Adam(lr = 0.00001))
+    # Compile network with the loss and optimizer
+    final_network.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.00001),
+                          metrics=[binary_accuracy])
+    # final_network.compile(loss=binary_crossentropy,optimizer=Adam(lr = 0.00001))
 
-        return final_network
+    return final_network
 
 
 def get_train_validation(train, portion):
@@ -305,16 +304,17 @@ def train_model(siamese_model, train, validation, batch_size, num_iterations, ma
     x1_train = train[0]
     x2_train = train[1]
     y_train = train[2]
-    x1_validation = validation[0]
-    x2_validation = validation[1]
-    x_validation = [x1_validation, x2_validation]
-    y_validation = validation[2]
+    #x1_validation = validation[0]
+    #x2_validation = validation[1]
+    #x_validation = [x1_validation, x2_validation]
+    #y_validation = validation[2]
 
-    batches = get_batches(batch_size, x1_train, x2_train, y_train)
+    #batches = get_batches(batch_size, x1_train, x2_train, y_train)
     iteration = 0
     best_val_loss = -1
     no_improve = 0
     epoch = 0
+    """
     while True:
 
         for x_batch, y_batch in batches:
@@ -323,7 +323,9 @@ def train_model(siamese_model, train, validation, batch_size, num_iterations, ma
             history = siamese_model.fit(x=x_batch, y=y_batch)
             print("loss - %s" % history.history["loss"])
             val_lost = siamese_model.evaluate(x=x_validation, y=y_validation)
+            y_rrr = siamese_model.predict(x = x_validation)
             print(val_lost)
+           # print(y_rrr)
             if best_val_loss == -1 or best_val_loss > val_lost:
                 best_val_loss = val_lost
                 no_improve = 0
@@ -335,6 +337,14 @@ def train_model(siamese_model, train, validation, batch_size, num_iterations, ma
         epoch += 1
         if iteration == num_iterations or max_no_improve == no_improve or epoch == max_epochs:
             break
+    """
+    X_train = [x1_train,x2_train]
+
+    history = siamese_model.fit(x=X_train, y=y_train,validation_split=0.2,epochs=6,verbose=2)
+
+
+
+
 
 
 def test_prediction(siamese_model, test):
@@ -349,20 +359,27 @@ def test_prediction(siamese_model, test):
 def test_model():
     # todo: changed the shape since img can be greyscale (much smaller dimensions)
     # img_shape = (105, 105, 3)
-    img_shape = (105, 105)
+    img_shape = (105, 105,1)
+    #img_shape = (250,250,1)
     validation_portion = 0.2
     batch_size = 32
-    num_of_iterations = 2
+    num_of_iterations = 100
+
+    print("Fetching train/test sets...")
     train, test = get_train_test_sets(shape=img_shape)
 
-    train, validation = get_train_validation(train, validation_portion)
+    print("Fetching validation set...")
+  #  train, validation = get_train_validation(train, validation_portion)
 
+    print("Building model...")
     siamese_model = build_model(shape=img_shape)
     siamese_model.summary()
-    train_model(siamese_model, train, validation, batch_size, num_of_iterations)
+
+    print("Training model...")
+    #train_model(siamese_model, train, validation, batch_size, num_of_iterations)
+    train_model(siamese_model, train, None, batch_size, num_of_iterations)
     test_prediction(siamese_model, test)
 
-    # predict(siamese_model,test)
 
 
 test_model()
