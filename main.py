@@ -3,7 +3,7 @@ from keras.models import Sequential, Model
 from keras.layers import Conv2D, Flatten, Dense, Input, Lambda
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
-from keras.metrics import accuracy, binary_accuracy
+from keras.metrics import binary_accuracy
 from keras import backend
 from keras.optimizers import Adam
 from keras.losses import binary_crossentropy
@@ -11,6 +11,7 @@ import cv2
 import pathlib
 import random
 import numpy as np
+
 import tensorflow as tf
 
 #threads = 1
@@ -151,7 +152,7 @@ def get_conv_weight_initializer():
     This function will return the initializer of the Convolution layers
     :return: Initializer of the Convolution layers
     """
-    return keras.initializers.RandomNormal(mean=0, stddev=0.01)
+    return keras.initializers.RandomNormal(mean=0, stddev=0.01,seed=1)
 
 
 def get_bias_weight_initializer():
@@ -159,7 +160,7 @@ def get_bias_weight_initializer():
         This function will return the initializer of the Convolution layers
         :return: Initializer of the bias
         """
-    return keras.initializers.RandomNormal(mean=0.5, stddev=0.01)
+    return keras.initializers.RandomNormal(mean=0.5, stddev=0.01,seed=1)
 
 
 def get_fc_weight_initializer():
@@ -167,7 +168,7 @@ def get_fc_weight_initializer():
         This function will return the initializer of the Convolution layers
         :return: Initializer of the FC layers
         """
-    return keras.initializers.RandomNormal(mean=0, stddev=0.1)
+    return keras.initializers.RandomNormal(mean=0, stddev=0.2,seed=1)
 
 
 def build_model(shape):
@@ -176,12 +177,14 @@ def build_model(shape):
     :param shape: The shape of the input
     :return: A Siamese Neural Network
     """
+
     #with tf.device('/CPU:0'):
     conv_initializer = get_conv_weight_initializer()  # The wight initializer for the Convolution layers
     bias_initializer = get_bias_weight_initializer()  # The bias initializer for the biases
     fc_initializer = get_fc_weight_initializer()  # The fc initializer for the fully connected layers
+
     n_features = 4096
-    l2_penalty = 0.001  # The penalty for the L2 regularization
+    l2_penalty = 0.00001  # The penalty for the L2 regularization
 
     model = Sequential()
 
@@ -235,12 +238,43 @@ def build_model(shape):
     final_network = Model(inputs=[twin1_input, twin2_input], outputs=output_layer)
 
     # Compile network with the loss and optimizer
-    final_network.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.00001),
-                          metrics=[binary_accuracy])
-    # final_network.compile(loss=binary_crossentropy,optimizer=Adam(lr = 0.00001))
+
+    final_network.compile(loss=binary_crossentropy, optimizer=Adam(lr=0.00001),
+                          metrics=["accuracy"])
+
 
     return final_network
+    """
+    init_weights_conv = keras.initializers.RandomNormal(mean=0.0, stddev=0.01, seed=1)
+    init_weights_dense = keras.initializers.RandomNormal(mean=0.0, stddev=0.2, seed=1)
+    ini_bias = keras.initializers.RandomNormal(mean=0.5, stddev=0.01, seed=1)
+    inp_1 = Input(shape=(105, 105, 1))
+    inp_2 = Input(shape=(105, 105, 1))
+    architecture = Sequential()
+    architecture.add(Conv2D(64, kernel_size=(10, 10), activation='relu',kernel_initializer=init_weights_conv, bias_initializer=ini_bias))
+    architecture.add(MaxPool2D((2, 2)))
+    architecture.add(Conv2D(128, kernel_size=(7, 7), activation='relu',kernel_initializer=init_weights_conv, bias_initializer=ini_bias))
+    architecture.add(MaxPool2D((2, 2)))
+    architecture.add(Conv2D(128, kernel_size=(4, 4), activation='relu',kernel_initializer=init_weights_conv, bias_initializer=ini_bias))
+    architecture.add(MaxPool2D((2, 2)))
+    architecture.add(Conv2D(256, kernel_size=(4, 4), activation='relu',kernel_initializer=init_weights_conv, bias_initializer=ini_bias))
+    architecture.add(MaxPool2D((2, 2)))
+    architecture.add(Flatten())
+    architecture.add(Dense(1024, activation='sigmoid',kernel_initializer=init_weights_dense, bias_initializer=ini_bias))
 
+    encoded_1 = architecture(inp_1)
+    encoded_2 = architecture(inp_2)
+
+    L1_layer = Lambda(lambda tensors: K.abs(tensors[0] - tensors[1]))
+    L1_distance = L1_layer([encoded_1, encoded_2])
+
+    output = Dense(1, activation='sigmoid')(L1_distance)
+    siamese_network = Model(inputs=[inp_1, inp_2], outputs=output)
+    siamese_network.compile(loss=binary_crossentropy, optimizer=Adam(lr=0.00001),
+                          metrics=[binary_accuracy])
+
+    return siamese_network
+    """
 
 def get_train_validation(train, portion):
     """
@@ -295,7 +329,7 @@ def get_batches(batch_size, x1_train, x2_train, y_train):
         batch_end = min((batch + 1) * batch_size, instance_count)  # avoid index out of bounds
         x_batch = [x1_train[batch_start:batch_end], x2_train[batch_start:batch_end]]
         y_batch = y_train[:, batch_start:batch_end]
-        y_batch = y_batch.reshape(y_batch.shape[1], )
+        y_batch = y_batch.reshape(y_batch.shape[1],1 )
         batches.append([x_batch, y_batch])
     return batches
 
@@ -311,6 +345,7 @@ def train_model(siamese_model, train, validation, batch_size, num_iterations, ma
 
     #batches = get_batches(batch_size, x1_train, x2_train, y_train)
     iteration = 0
+    best_val_loss = -1
     best_val_loss = -1
     no_improve = 0
     epoch = 0
@@ -340,8 +375,9 @@ def train_model(siamese_model, train, validation, batch_size, num_iterations, ma
     """
     X_train = [x1_train,x2_train]
 
-    history = siamese_model.fit(x=X_train, y=y_train,validation_split=0.2,epochs=6,verbose=2)
-
+    history = siamese_model.fit(x=X_train, y=y_train,validation_split=0.2,batch_size=32,epochs=50,verbose=2)
+    y_r = siamese_model.predict(X_train)
+    print(binary_crossentropy(y_true=y_train,y_pred=y_r))
 
 
 
