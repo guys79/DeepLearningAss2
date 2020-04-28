@@ -4,7 +4,7 @@ from keras.layers import Conv2D, Flatten, Dense, Input, Lambda, Dropout
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
 from keras import backend
-from keras.optimizers import Adam
+from keras.optimizers import SGD, RMSprop,Adam
 from keras.losses import binary_crossentropy
 import cv2
 import pathlib
@@ -185,39 +185,49 @@ def build_model(shape):
 
     n_features = 4096
     l2_penalty = 0.00001  # The penalty for the L2 regularization
-    dropout_prob = 0.2
+    dropout_prob = 0.1
     dropout = dropout_prob!=0
+    optimizer = Adam(lr=0.00001)
+    #optimizer = SGD(lr=0.00001)
+    #optimizer = RMSprop(lr=0.00001)
     model = Sequential()
 
     # Add a convolution layer with 64 10x10 filters. The activation function is RELU
     model.add(Conv2D(64, (10, 10), activation='relu', input_shape=shape, kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-    # MaxPooling (2,2)
-    model.add(MaxPool2D(pool_size=(2, 2)))
 
     # Add a dropout layer
     if dropout:
-        model.add(Dropout(dropout_prob))
+     model.add(Dropout(dropout_prob))
+
+    # MaxPooling (2,2)
+    model.add(MaxPool2D(pool_size=(2, 2)))
 
     # Add a convolution layer with 128 7x7 filters. The activation function is RELU
     model.add(Conv2D(128, (7, 7), activation='relu', kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-    # MaxPooling (2,2)
-    model.add(MaxPool2D(pool_size=(2, 2)))
 
     # Add a dropout layer
     if dropout:
         model.add(Dropout(dropout_prob))
+
+    # MaxPooling (2,2)
+    model.add(MaxPool2D(pool_size=(2, 2)))
+
+
 
     # Add a convolution layer with 128 4x4 filters. The activation function is RELU
     model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-    # MaxPooling (2,2)
-    model.add(MaxPool2D(pool_size=(2, 2)))
 
     # Add a dropout layer
     if dropout:
         model.add(Dropout(dropout_prob))
+
+
+    # MaxPooling (2,2)
+    model.add(MaxPool2D(pool_size=(2, 2)))
+
 
     # Add a convolution layer with 256 4x4 filters. The activation function is RELU
     model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer=conv_initializer,
@@ -226,8 +236,8 @@ def build_model(shape):
     model.add(Flatten())
 
     # Add a dropout layer
-    if dropout:
-        model.add(Dropout(dropout_prob))
+    #if dropout:
+     #   model.add(Dropout(dropout_prob))
 
     # Add a fully connected layer with 4096 units (the number of features in the feature map)
     model.add(
@@ -256,8 +266,8 @@ def build_model(shape):
 
     # Compile network with the loss and optimizer
 
-    final_network.compile(loss=binary_crossentropy, optimizer=Adam(lr=0.00001),
-                          metrics=["accuracy"])
+    final_network.compile(loss=binary_crossentropy,
+                          metrics=["accuracy"],optimizer=optimizer)
 
 
     return final_network
@@ -399,7 +409,7 @@ def test_model():
     img_shape = (105, 105,1)
     validation_portion = 0.2
     batch_size = 32
-    epochs = 15
+    epochs = 10
 
     print("Fetching train/test sets...")
     train, test = get_train_test_sets(shape=img_shape)
