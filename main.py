@@ -1,6 +1,6 @@
 import keras
 from keras.models import Sequential, Model
-from keras.layers import Conv2D, Flatten, Dense, Input, Lambda
+from keras.layers import Conv2D, Flatten, Dense, Input, Lambda, Dropout
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
 from keras import backend
@@ -185,7 +185,8 @@ def build_model(shape):
 
     n_features = 4096
     l2_penalty = 0.00001  # The penalty for the L2 regularization
-
+    dropout_prob = 0.2
+    dropout = dropout_prob!=0
     model = Sequential()
 
     # Add a convolution layer with 64 10x10 filters. The activation function is RELU
@@ -194,11 +195,19 @@ def build_model(shape):
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
 
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
+
     # Add a convolution layer with 128 7x7 filters. The activation function is RELU
     model.add(Conv2D(128, (7, 7), activation='relu', kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
+
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
 
     # Add a convolution layer with 128 4x4 filters. The activation function is RELU
     model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=conv_initializer,
@@ -206,11 +215,19 @@ def build_model(shape):
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
 
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
+
     # Add a convolution layer with 256 4x4 filters. The activation function is RELU
     model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
     # Flatten the
     model.add(Flatten())
+
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
 
     # Add a fully connected layer with 4096 units (the number of features in the feature map)
     model.add(
