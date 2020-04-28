@@ -1,6 +1,6 @@
 import keras
 from keras.models import Sequential, Model
-from keras.layers import Conv2D, Flatten, Dense, Input, Lambda
+from keras.layers import Conv2D, Flatten, Dense, Input, Lambda, Dropout
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
 from keras.metrics import accuracy, binary_accuracy
@@ -119,7 +119,8 @@ def get_single_image(name, number, shape=(105, 105, 1), margin=0.25):
     width_margin = int(margin * width)
     height_margin = int(margin * height)
     cropped_img = img[width_margin:width - width_margin, height_margin:height - height_margin]
-    resized_img = cv2.resize(cropped_img, shape, interpolation=cv2.INTER_AREA) / 255
+    resized_img = cv2.resize(cropped_img, (shape[0],shape[1]), interpolation=cv2.INTER_AREA) / 255
+    resized_img = np.reshape(resized_img,shape)
     return resized_img
 
 
@@ -186,7 +187,8 @@ def build_model(shape):
     fc_initializer = get_fc_weight_initializer()  # The fc initializer for the fully connected layers
     n_features = 4096
     l2_penalty = 0.001  # The penalty for the L2 regularization
-
+    dropout_prob = 0.2
+    dropout = dropout_prob!=0
     model = Sequential()
 
     # Add a convolution layer with 64 10x10 filters. The activation function is RELU
@@ -195,17 +197,29 @@ def build_model(shape):
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
 
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
+
     # Add a convolution layer with 128 7x7 filters. The activation function is RELU
     model.add(Conv2D(128, (7, 7), activation='relu', kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
 
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
+
     # Add a convolution layer with 128 4x4 filters. The activation function is RELU
     model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
+
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
 
     # Add a convolution layer with 256 4x4 filters. The activation function is RELU
     model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer=conv_initializer,
@@ -217,6 +231,10 @@ def build_model(shape):
     model.add(
         Dense(n_features, activation='sigmoid', kernel_initializer=fc_initializer, bias_initializer=bias_initializer
               , kernel_regularizer=l2(l2_penalty)))
+
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
 
     # Creating the two twins based in the model
     twin1_input = Input(shape)
@@ -234,6 +252,7 @@ def build_model(shape):
     # Creating the output layer (only one output neuron)
     output_layer = Dense(1, activation='sigmoid', kernel_initializer=fc_initializer
                          , bias_initializer=bias_initializer)(merge_layer)
+
 
     # Creating the final network
     final_network = Model(inputs=[twin1_input, twin2_input], outputs=output_layer)
@@ -344,7 +363,7 @@ def train_model(siamese_model, train, validation, batch_size, num_iterations, ma
     """
     X_train = [x1_train,x2_train]
 
-    history = siamese_model.fit(x=X_train, y=y_train,validation_split=0.2,epochs=6,verbose=2)
+    history = siamese_model.fit(x=X_train, y=y_train,validation_split=0.2,epochs=6,batch_size = 32,verbose=2)
 
 
 
