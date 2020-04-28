@@ -1,6 +1,6 @@
 import keras
 from keras.models import Sequential, Model
-from keras.layers import Conv2D, Flatten, Dense, Input, Lambda, Dropout
+from keras.layers import Conv2D, Flatten, Dense, Input, Lambda, Dropout,BatchNormalization
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
 from keras import backend
@@ -185,9 +185,10 @@ def build_model(shape):
 
     n_features = 4096
     l2_penalty = 0.00001  # The penalty for the L2 regularization
-    dropout_prob = 0.1
+    dropout_prob = 0
     dropout = dropout_prob!=0
     optimizer = Adam(lr=0.00001)
+    batch_norm = True
     #optimizer = SGD(lr=0.00001)
     #optimizer = RMSprop(lr=0.00001)
     model = Sequential()
@@ -195,7 +196,8 @@ def build_model(shape):
     # Add a convolution layer with 64 10x10 filters. The activation function is RELU
     model.add(Conv2D(64, (10, 10), activation='relu', input_shape=shape, kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-
+    if batch_norm:
+        model.add(BatchNormalization())
     # Add a dropout layer
     if dropout:
      model.add(Dropout(dropout_prob))
@@ -206,10 +208,11 @@ def build_model(shape):
     # Add a convolution layer with 128 7x7 filters. The activation function is RELU
     model.add(Conv2D(128, (7, 7), activation='relu', kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-
+    if batch_norm:
+        model.add(BatchNormalization())
     # Add a dropout layer
-    if dropout:
-        model.add(Dropout(dropout_prob))
+    #if dropout:
+     #   model.add(Dropout(dropout_prob))
 
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
@@ -219,7 +222,8 @@ def build_model(shape):
     # Add a convolution layer with 128 4x4 filters. The activation function is RELU
     model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=conv_initializer,
                      bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
-
+    if batch_norm:
+        model.add(BatchNormalization())
     # Add a dropout layer
     if dropout:
         model.add(Dropout(dropout_prob))
@@ -243,7 +247,8 @@ def build_model(shape):
     model.add(
         Dense(n_features, activation='sigmoid', kernel_initializer=fc_initializer, bias_initializer=bias_initializer
               , kernel_regularizer=l2(l2_penalty)))
-
+    if batch_norm:
+        model.add(BatchNormalization())
     # Creating the two twins based in the model
     twin1_input = Input(shape)
     twin2_input = Input(shape)
