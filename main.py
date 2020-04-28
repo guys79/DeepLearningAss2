@@ -1,10 +1,10 @@
 import keras
 from keras.models import Sequential, Model
-from keras.layers import Conv2D, Flatten, Dense, Input, Lambda
+from keras.layers import Conv2D, Flatten, Dense, Input, Lambda, Dropout
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
 from keras import backend
-from keras.optimizers import Adam
+from keras.optimizers import SGD, RMSprop,Adam
 from keras.losses import binary_crossentropy
 import cv2
 import pathlib
@@ -184,38 +184,65 @@ def build_model(shape):
     fc_initializer = get_fc_weight_initializer()  # The fc initializer for the fully connected layers
 
     n_features = 4096
-    l2_penalty = 0.0001  # The penalty for the L2 regularization
-
+    l2_penalty = 0.00001  # The penalty for the L2 regularization
+    dropout_prob = 0.1
+    dropout = dropout_prob!=0
+    optimizer = Adam(lr=0.00001)
+    #optimizer = SGD(lr=0.00001)
+    #optimizer = RMSprop(lr=0.00001)
     model = Sequential()
 
     # Add a convolution layer with 64 10x10 filters. The activation function is RELU
     model.add(Conv2D(64, (10, 10), activation='relu', input_shape=shape, kernel_initializer=conv_initializer,
-                     bias_initializer=bias_initializer,kernel_regularizer=l2(l2_penalty)))
+                     bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
+
+    # Add a dropout layer
+    if dropout:
+     model.add(Dropout(dropout_prob))
+
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
 
     # Add a convolution layer with 128 7x7 filters. The activation function is RELU
     model.add(Conv2D(128, (7, 7), activation='relu', kernel_initializer=conv_initializer,
-                     bias_initializer=bias_initializer,kernel_regularizer=l2(l2_penalty)))
+                     bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
+
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
+
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
+
+
 
     # Add a convolution layer with 128 4x4 filters. The activation function is RELU
     model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=conv_initializer,
-                     bias_initializer=bias_initializer,kernel_regularizer=l2(l2_penalty)))
+                     bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
+
+    # Add a dropout layer
+    if dropout:
+        model.add(Dropout(dropout_prob))
+
+
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
 
+
     # Add a convolution layer with 256 4x4 filters. The activation function is RELU
     model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer=conv_initializer,
-                     bias_initializer=bias_initializer,kernel_regularizer=l2(l2_penalty)))
+                     bias_initializer=bias_initializer, kernel_regularizer=l2(l2_penalty)))
     # Flatten the
     model.add(Flatten())
+
+    # Add a dropout layer
+    #if dropout:
+     #   model.add(Dropout(dropout_prob))
 
     # Add a fully connected layer with 4096 units (the number of features in the feature map)
     model.add(
         Dense(n_features, activation='sigmoid', kernel_initializer=fc_initializer, bias_initializer=bias_initializer
-              ))  #, kernel_regularizer=l2(l2_penalty)))
+              , kernel_regularizer=l2(l2_penalty)))
 
     # Creating the two twins based in the model
     twin1_input = Input(shape)
@@ -239,8 +266,8 @@ def build_model(shape):
 
     # Compile network with the loss and optimizer
 
-    final_network.compile(loss=binary_crossentropy, optimizer=Adam(lr=0.00001),
-                          metrics=["accuracy"])
+    final_network.compile(loss=binary_crossentropy,
+                          metrics=["accuracy"],optimizer=optimizer)
 
 
     return final_network
@@ -369,7 +396,7 @@ def write_to_file(history,test_loss,test_acc):
     test_line = "test_loss,%s,test_accuracy,%s" % (test_loss, test_acc)
     to_file.append(test_line)
 
-    file = open('results_0001.csv', 'w')
+    file = open('results.csv', 'w')
     for i in range(len(to_file)):
         file.write("%s\n" % to_file[i])
 
