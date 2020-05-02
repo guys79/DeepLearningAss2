@@ -1,17 +1,16 @@
 import keras
 from keras.models import Sequential, Model
-from keras.layers import Conv2D, Flatten, Dense, Input, Lambda, Dropout,BatchNormalization
+from keras.layers import Conv2D, Flatten, Dense, Input, Lambda, Dropout, BatchNormalization
 from keras.layers.pooling import MaxPool2D
 from keras.regularizers import l2
 from keras import backend
-from keras.optimizers import SGD, RMSprop,Adam
+from keras.optimizers import SGD, RMSprop, Adam
 from keras.losses import binary_crossentropy
 import cv2
 import pathlib
 import random
 import numpy as np
-
-
+import tensorflow as tf
 
 
 def get_train_set():
@@ -22,7 +21,7 @@ def get_train_set():
     :return: The train set
     """
     train = []
-    file = open("pairsDevTrain.txt", "r")
+    file = open("DeepLearningAss2/pairsDevTrain.txt", "r")
     first = True
 
     for line in file:
@@ -37,7 +36,6 @@ def get_train_set():
             else:
                 raise Exception("Invalid inout")
             train.append(train_tuple)
-
     return train
 
 
@@ -49,7 +47,7 @@ def get_test_set():
     :return: The test set
     """
     test = []
-    file = open("pairsDevTest.txt", "r")
+    file = open("DeepLearningAss2/pairsDevTest.txt", "r")
     first = True
     for line in file:
         if first:
@@ -108,14 +106,14 @@ def get_single_image(name, number, shape=(105, 105, 1), margin=0.25):
     :return: The image object with the given shap
     """
     format_num = format_number(number)
-    path = r'%s/lfw2/%s/%s_%s.jpg' % (pathlib.Path(__file__).parent.absolute(), name, name, format_num)
+    path = r'DeepLearningAss2/lfw2/%s/%s_%s.jpg' % (name, name, format_num)
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     width = img.shape[0]
     height = img.shape[1]
     width_margin = int(margin * width)
     height_margin = int(margin * height)
     cropped_img = img[width_margin:width - width_margin, height_margin:height - height_margin]
-    resized_img = cv2.resize(cropped_img, (shape[0],shape[1]), interpolation=cv2.INTER_AREA) / 255
+    resized_img = cv2.resize(cropped_img, (shape[0], shape[1]), interpolation=cv2.INTER_AREA) / 255
     resized_img = np.reshape(resized_img, shape)
     return resized_img
 
@@ -152,7 +150,7 @@ def get_conv_weight_initializer():
     This function will return the initializer of the Convolution layers
     :return: Initializer of the Convolution layers
     """
-    return keras.initializers.RandomNormal(mean=0, stddev=0.01,seed=1)
+    return keras.initializers.RandomNormal(mean=0, stddev=0.01, seed=1)
 
 
 def get_bias_weight_initializer():
@@ -160,7 +158,7 @@ def get_bias_weight_initializer():
         This function will return the initializer of the Convolution layers
         :return: Initializer of the bias
         """
-    return keras.initializers.RandomNormal(mean=0.5, stddev=0.01,seed=1)
+    return keras.initializers.RandomNormal(mean=0.5, stddev=0.01, seed=1)
 
 
 def get_fc_weight_initializer():
@@ -168,29 +166,23 @@ def get_fc_weight_initializer():
         This function will return the initializer of the Convolution layers
         :return: Initializer of the FC layers
         """
-    return keras.initializers.RandomNormal(mean=0, stddev=0.2,seed=1)
+    return keras.initializers.RandomNormal(mean=0, stddev=0.2, seed=1)
 
 
-def build_model(shape):
+def build_model(shape, l2_penalty=0.0, batch_norm=False, dropout_prob=0, optimizer_alg=Adam, lr=0.00001):
     """
     This function will assemble a Siamese Neural Networks that compares between inputs with the shape of 'shape'
     :param shape: The shape of the input
     :return: A Siamese Neural Network
     """
 
-
     conv_initializer = get_conv_weight_initializer()  # The wight initializer for the Convolution layers
     bias_initializer = get_bias_weight_initializer()  # The bias initializer for the biases
     fc_initializer = get_fc_weight_initializer()  # The fc initializer for the fully connected layers
 
     n_features = 4096
-    l2_penalty = 0.00001  # The penalty for the L2 regularization
-    dropout_prob = 0
-    dropout = dropout_prob!=0
-    optimizer = Adam(lr=0.00001)
-    batch_norm = True
-    #optimizer = SGD(lr=0.00001)
-    #optimizer = RMSprop(lr=0.00001)
+    dropout = dropout_prob != 0
+    optimizer = optimizer_alg(lr)
     model = Sequential()
 
     # Add a convolution layer with 64 10x10 filters. The activation function is RELU
@@ -200,7 +192,7 @@ def build_model(shape):
         model.add(BatchNormalization())
     # Add a dropout layer
     if dropout:
-     model.add(Dropout(dropout_prob))
+        model.add(Dropout(dropout_prob))
 
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
@@ -211,13 +203,11 @@ def build_model(shape):
     if batch_norm:
         model.add(BatchNormalization())
     # Add a dropout layer
-    #if dropout:
-     #   model.add(Dropout(dropout_prob))
+    # if dropout:
+    #   model.add(Dropout(dropout_prob))
 
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
-
-
 
     # Add a convolution layer with 128 4x4 filters. The activation function is RELU
     model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=conv_initializer,
@@ -228,10 +218,8 @@ def build_model(shape):
     if dropout:
         model.add(Dropout(dropout_prob))
 
-
     # MaxPooling (2,2)
     model.add(MaxPool2D(pool_size=(2, 2)))
-
 
     # Add a convolution layer with 256 4x4 filters. The activation function is RELU
     model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer=conv_initializer,
@@ -240,8 +228,8 @@ def build_model(shape):
     model.add(Flatten())
 
     # Add a dropout layer
-    #if dropout:
-     #   model.add(Dropout(dropout_prob))
+    # if dropout:
+    #   model.add(Dropout(dropout_prob))
 
     # Add a fully connected layer with 4096 units (the number of features in the feature map)
     model.add(
@@ -272,10 +260,10 @@ def build_model(shape):
     # Compile network with the loss and optimizer
 
     final_network.compile(loss=binary_crossentropy,
-                          metrics=["accuracy"],optimizer=optimizer)
-
+                          metrics=["accuracy"], optimizer=optimizer)
 
     return final_network
+
 
 def get_train_validation(train, portion):
     """
@@ -330,12 +318,13 @@ def get_batches(batch_size, x1_train, x2_train, y_train):
         batch_end = min((batch + 1) * batch_size, instance_count)  # avoid index out of bounds
         x_batch = [x1_train[batch_start:batch_end], x2_train[batch_start:batch_end]]
         y_batch = y_train[:, batch_start:batch_end]
-        y_batch = y_batch.reshape(y_batch.shape[1],1 )
+        y_batch = y_batch.reshape(y_batch.shape[1], 1)
         batches.append([x_batch, y_batch])
     return batches
 
 
-def train_model(siamese_model, train, validation_split, batch_size, epochs):
+def train_model(siamese_model, train, validation_split, batch_size,
+                epochs=200, early_stop=True, early_stop_patience=20):
     """
     This function will train the model
     :param siamese_model: The given model
@@ -343,20 +332,26 @@ def train_model(siamese_model, train, validation_split, batch_size, epochs):
     :param validation_split: The validation_split (the portion of the validation out of the train set)
     :param batch_size: The batch size
     :param epochs: The number of epochs
+    :param early_stop: true to perform early stop
+    :param early_stop_patience: num of epochs without improvement to stop
     :return: The history of the model training
     """
     x1_train = train[0]
     x2_train = train[1]
     y_train = train[2]
-    X_train = [x1_train,x2_train]
+    X_train = [x1_train, x2_train]
 
-    history = siamese_model.fit(x=X_train, y=y_train,validation_split=validation_split,batch_size=batch_size,epochs=epochs,verbose=2)
+    callbacks = None
+    if early_stop:
+        callbacks = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=early_stop_patience,
+                                                     restore_best_weights=True)
+
+    history = siamese_model.fit(x=X_train, y=y_train, validation_split=validation_split, batch_size=batch_size,
+                                epochs=epochs, callbacks=[callbacks], verbose=2)
 
     y_r = siamese_model.predict(X_train)
-    print(binary_crossentropy(y_true=y_train,y_pred=y_r))
+    print(binary_crossentropy(y_true=y_train, y_pred=y_r))
     return history.history
-
-
 
 
 def test_prediction(siamese_model, test):
@@ -373,9 +368,10 @@ def test_prediction(siamese_model, test):
     score = siamese_model.evaluate(x=x_test, y=y_test)
     loss = score[0]
     acc = score[1]
-    return loss,acc
+    return loss, acc
 
-def write_to_file(history,test_loss,test_acc):
+
+def write_to_file(history, test_loss, test_acc, l2_penalty, batch_norm, dropout_prob, optimizer_name, lr):
     """
     This function will write the results to the file
     :param history: The history of the model training
@@ -383,6 +379,8 @@ def write_to_file(history,test_loss,test_acc):
     :param test_acc: The test accuracy
     :return:
     """
+    dir_name = 'l2_%.5f batch_norm_%s dropout_%.5f optimizer_%s lr_%.5f' % \
+               (l2_penalty, batch_norm, dropout_prob, optimizer_name, lr)
     to_file = []
     header = "epoch"
     scores = []
@@ -398,12 +396,14 @@ def write_to_file(history,test_loss,test_acc):
         for j in range(len(scores)):
             line = "%s,%s" % (line, scores[j][i])
         to_file.append(line)
-    test_line = "test_loss,%s,test_accuracy,%s" % (test_loss, test_acc)
-    to_file.append(test_line)
 
-    file = open('results.csv', 'w')
+    file = open('%s\\train_and_val_results.csv' % dir_name, 'w')
     for i in range(len(to_file)):
         file.write("%s\n" % to_file[i])
+
+    test_line = "test_loss,%s,test_accuracy,%s" % (test_loss, test_acc)
+    open('%s\\test_results.csv' % dir_name, 'w').write(test_line)
+
 
 def test_model():
     """
@@ -411,26 +411,32 @@ def test_model():
     The function will fetch the data, build the model, train it and test it
     :return:
     """
-    img_shape = (105, 105,1)
-    validation_portion = 0.2
-    batch_size = 32
-    epochs = 10
+    img_shape = (105, 105, 1)
 
     print("Fetching train/test sets...")
     train, test = get_train_test_sets(shape=img_shape)
 
+    # choose model parameters
+    epochs = 200
+    batch_size = 32
+    l2_penalty = 0.00001
+    batch_norm = True
+    dropout_prob = 0
+    optimizer_alg = Adam
+    optimizer_name = 'Adam'
+    lr = 0.00001
+    validation_portion = 0.2
+    early_stop = True
+    early_stop_patience = 20
 
     print("Building model...")
-    siamese_model = build_model(shape=img_shape)
+    siamese_model = build_model(img_shape, l2_penalty, batch_norm, dropout_prob, optimizer_alg, lr)
     siamese_model.summary()
 
     print("Training model...")
     history = train_model(siamese_model, train, validation_portion, batch_size, epochs)
     test_loss, test_acc = test_prediction(siamese_model, test)
-    write_to_file(history,test_loss,test_acc)
-
-
-
+    write_to_file(history, test_loss, test_acc, l2_penalty, batch_norm, dropout_prob, optimizer_name, lr)
 
 
 test_model()
